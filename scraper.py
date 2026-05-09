@@ -64,7 +64,7 @@ def parse_table(soup, table_id):
             rows.append(cells)
 
     if not rows:
-        return None
+        return None2
 
     df = pd.DataFrame(rows, columns=headers[:len(rows[0])] if headers else None)
     return df
@@ -153,23 +153,34 @@ def scrape_team_records(year):
     time.sleep(DELAY)
 
     rows = []
+    seen = set()
     for table_id in ["confs_standings_E", "confs_standings_W", "divs_standings_E", "divs_standings_W"]:
         table = soup.find("table", {"id": table_id})
         if not table:
             continue
-        for tr in table.find("tbody").find_all("tr", class_="full_table"):
+        for tr in table.find("tbody").find_all("tr"):
+            if tr.get("class") and "full_table" not in tr.get("class", []):
+                continue
             team_cell   = tr.find(["th", "td"], {"data-stat": "team_name"})
             wins_cell   = tr.find("td", {"data-stat": "wins"})
             losses_cell = tr.find("td", {"data-stat": "losses"})
             pct_cell    = tr.find("td", {"data-stat": "win_loss_pct"})
-            if team_cell and wins_cell and losses_cell:
-                rows.append({
-                    "Team":   team_cell.get_text(strip=True).replace("*", ""),
-                    "W":      wins_cell.get_text(strip=True),
-                    "L":      losses_cell.get_text(strip=True),
-                    "W/L%":   pct_cell.get_text(strip=True) if pct_cell else None,
-                    "season": year,
-                })
+            if not (team_cell and wins_cell and losses_cell):
+                continue
+            link = team_cell.find("a")
+            abbr = link["href"].split("/")[2] if link else None
+            team_name = team_cell.get_text(strip=True).replace("*", "")
+            if team_name in seen:
+                continue
+            seen.add(team_name)
+            rows.append({
+                "Team":         team_name,
+                "W":            wins_cell.get_text(strip=True),
+                "L":            losses_cell.get_text(strip=True),
+                "W/L%":         pct_cell.get_text(strip=True) if pct_cell else None,
+                "season":       year,
+                "Abbreviation": abbr,
+            })
 
     if not rows:
         print(f"  warning: no team records found for {year}")
